@@ -1,121 +1,170 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
+import { useMemo, useState } from 'react'
+import { NavLink, Navigate, Route, Routes } from 'react-router'
 import './App.css'
 
-function App() {
-  const [count, setCount] = useState(0)
+const navItems = [
+  {
+    label: 'Finanzas',
+    path: '/finanzas',
+    icon: '$',
+  },
+]
+
+function Finanzas() {
+  const spendingLimit = 600
+  const [incomeAmount, setIncomeAmount] = useState('')
+  const [expenseAmount, setExpenseAmount] = useState('')
+  const [income, setIncome] = useState(0)
+  const [expenses, setExpenses] = useState(0)
+
+  const balance = income - expenses
+  const limitProgress = Math.min((expenses / spendingLimit) * 100, 100)
+  const limitStatus = useMemo(() => {
+    if (expenses >= spendingLimit) {
+      return 'danger'
+    }
+
+    if (expenses >= spendingLimit / 2) {
+      return 'warning'
+    }
+
+    return 'normal'
+  }, [expenses])
+
+  const formatter = new Intl.NumberFormat('es-MX', {
+    style: 'currency',
+    currency: 'MXN',
+    maximumFractionDigits: 0,
+  })
+
+  const addIncome = (event) => {
+    event.preventDefault()
+    const value = Number(incomeAmount)
+
+    if (!value || value <= 0) {
+      return
+    }
+
+    setIncome((currentIncome) => currentIncome + value)
+    setIncomeAmount('')
+  }
+
+  const addExpense = (event) => {
+    event.preventDefault()
+    const value = Number(expenseAmount)
+
+    if (!value || value <= 0) {
+      return
+    }
+
+    setExpenses((currentExpenses) => currentExpenses + value)
+    setExpenseAmount('')
+  }
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
+    <section className="page-panel">
+      <p className="eyebrow">Panel</p>
+      <h1>Finanzas</h1>
+      <div className="finance-grid">
+        <article>
+          <span>Balance</span>
+          <strong>{formatter.format(balance)}</strong>
+        </article>
+        <article>
+          <span>Ingresos</span>
+          <strong>{formatter.format(income)}</strong>
+        </article>
+        <article>
+          <span>Gastos</span>
+          <strong>{formatter.format(expenses)}</strong>
+        </article>
+      </div>
+
+      <div className="finance-actions">
+        <article className={`limit-card ${limitStatus}`}>
+          <div className="limit-header">
+            <div>
+              <span>Limite de gastos</span>
+              <strong>{formatter.format(expenses)}</strong>
+            </div>
+            <p>{formatter.format(spendingLimit)}</p>
+          </div>
+          <div className="limit-track" aria-hidden="true">
+            <div style={{ width: `${limitProgress}%` }}></div>
+          </div>
+          <p className="limit-copy">
+            {limitStatus === 'danger'
+              ? 'Limite alcanzado'
+              : `${formatter.format(spendingLimit - expenses)} disponibles`}
           </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+        </article>
 
-      <div className="ticks"></div>
+        <div className="money-forms">
+          <form onSubmit={addIncome}>
+            <label htmlFor="income-amount">Guardar ingreso</label>
+            <div className="money-control">
+              <input
+                id="income-amount"
+                min="0"
+                step="1"
+                type="number"
+                value={incomeAmount}
+                onChange={(event) => setIncomeAmount(event.target.value)}
+                placeholder="0"
+              />
+              <button type="submit">Guardar</button>
+            </div>
+          </form>
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
+          <form onSubmit={addExpense}>
+            <label htmlFor="expense-amount">Realizar gasto</label>
+            <div className="money-control">
+              <input
+                id="expense-amount"
+                min="0"
+                step="1"
+                type="number"
+                value={expenseAmount}
+                onChange={(event) => setExpenseAmount(event.target.value)}
+                placeholder="0"
+              />
+              <button type="submit">Gastar</button>
+            </div>
+          </form>
         </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+      </div>
+    </section>
+  )
+}
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+function App() {
+  return (
+    <div className="app-shell">
+      <aside className="sidebar" aria-label="Navegacion principal">
+        <div className="brand-mark">C</div>
+        <nav>
+          {navItems.map((item) => (
+            <NavLink key={item.path} to={item.path} className="nav-link">
+              <span className="nav-icon" aria-hidden="true">
+                {item.icon}
+              </span>
+              <span>{item.label}</span>
+            </NavLink>
+          ))}
+        </nav>
+      </aside>
+
+      <main className="content">
+        <div className="content-topline">
+          <span>Control</span>
+          <span>2026</span>
+        </div>
+        <Routes>
+          <Route path="/" element={<Navigate to="/finanzas" replace />} />
+          <Route path="/finanzas" element={<Finanzas />} />
+        </Routes>
+      </main>
+    </div>
   )
 }
 
