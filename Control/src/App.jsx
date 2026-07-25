@@ -77,7 +77,8 @@ function Finanzas() {
   const formatter = new Intl.NumberFormat('es-MX', {
     style: 'currency',
     currency: 'MXN',
-    maximumFractionDigits: 0,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   })
 
   const saveMovement = async (tipo, monto) => {
@@ -176,7 +177,7 @@ function Finanzas() {
               <input
                 id="income-amount"
                 min="0"
-                step="1"
+                step="0.01"
                 type="number"
                 value={incomeAmount}
                 onChange={(event) => setIncomeAmount(event.target.value)}
@@ -194,7 +195,7 @@ function Finanzas() {
               <input
                 id="expense-amount"
                 min="0"
-                step="1"
+                step="0.01"
                 type="number"
                 value={expenseAmount}
                 onChange={(event) => setExpenseAmount(event.target.value)}
