@@ -1,6 +1,11 @@
-import 'dotenv/config'
 import { PrismaMariaDb } from '@prisma/adapter-mariadb'
 import { PrismaClient } from '../generated/prisma/client.ts'
+import dotenv from 'dotenv'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const currentDir = dirname(fileURLToPath(import.meta.url))
+dotenv.config({ path: resolve(currentDir, '../.env') })
 
 function databaseUrl() {
   if (process.env.DATABASE_URL) {

@@ -1,9 +1,12 @@
 import cors from 'cors'
 import express from 'express'
 import dotenv from 'dotenv'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { prisma } from './prisma.js'
 
-dotenv.config()
+const currentDir = dirname(fileURLToPath(import.meta.url))
+dotenv.config({ path: resolve(currentDir, '../.env') })
 
 const app = express()
 const port = Number(process.env.PORT || 3001)
@@ -194,7 +197,9 @@ app.put('/api/gastos/:id', async (req, res, next) => {
 
 app.use((error, _req, res, _next) => {
   console.error(error)
-  res.status(500).json({ message: 'No se pudo completar la operacion.' })
+  res.status(error.statusCode || 500).json({
+    message: error.statusCode ? error.message : 'No se pudo completar la operacion.',
+  })
 })
 
 app.listen(port, () => {

@@ -1,5 +1,10 @@
-import 'dotenv/config'
 import mysql from 'mysql2/promise'
+import dotenv from 'dotenv'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const currentDir = dirname(fileURLToPath(import.meta.url))
+dotenv.config({ path: resolve(currentDir, '../.env') })
 
 function databaseConfig() {
   const databaseUrl = process.env.DATABASE_URL
