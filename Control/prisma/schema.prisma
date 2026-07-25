@@ -17,9 +17,14 @@ model Finanza {
   tipo        TipoFinanza
   monto       Decimal     @db.Decimal(12, 2)
   descripcion String?     @db.VarChar(255)
+  categoria   String?     @db.VarChar(80)
+  producto    String?     @db.VarChar(120)
+  ingredientes String?    @db.Text
   creadoEn    DateTime    @default(now()) @map("creado_en")
 
   @@index([tipo], map: "idx_finanzas_tipo")
+  @@index([categoria], map: "idx_finanzas_categoria")
+  @@index([producto], map: "idx_finanzas_producto")
   @@index([creadoEn], map: "idx_finanzas_creado_en")
   @@map("finanzas")
 }

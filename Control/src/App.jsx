@@ -8,14 +8,33 @@ const navItems = [
     path: '/finanzas',
     icon: '$',
   },
+  {
+    label: 'Gastos',
+    path: '/gastos',
+    icon: '#',
+  },
 ]
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+const expenseCategories = [
+  'Bebidas',
+  'Comida',
+  'Suscripciones',
+  'Entretenimiento',
+  'Juegos',
+  'Delivery',
+]
+const newProductValue = '__nuevo__'
 
 function Finanzas() {
   const spendingLimit = 600
   const [incomeAmount, setIncomeAmount] = useState('')
   const [expenseAmount, setExpenseAmount] = useState('')
+  const [expenseCategory, setExpenseCategory] = useState(expenseCategories[0])
+  const [expenseProduct, setExpenseProduct] = useState('')
+  const [newExpenseProduct, setNewExpenseProduct] = useState('')
+  const [expenseIngredients, setExpenseIngredients] = useState('')
+  const [products, setProducts] = useState([])
   const [income, setIncome] = useState(0)
   const [expenses, setExpenses] = useState(0)
   const [isSaving, setIsSaving] = useState(false)
@@ -36,15 +55,26 @@ function Finanzas() {
     return response.json()
   }
 
+  const loadProducts = async () => {
+    const response = await fetch(`${API_URL}/api/productos`)
+
+    if (!response.ok) {
+      throw new Error('No se pudieron cargar los productos.')
+    }
+
+    return response.json()
+  }
+
   useEffect(() => {
     let ignore = false
 
-    async function hydrateSummary() {
+    async function hydrateData() {
       try {
-        const data = await loadSummary()
+        const [summaryData, productData] = await Promise.all([loadSummary(), loadProducts()])
 
         if (!ignore) {
-          applySummary(data)
+          applySummary(summaryData)
+          setProducts(productData)
         }
       } catch {
         if (!ignore) {
@@ -53,7 +83,7 @@ function Finanzas() {
       }
     }
 
-    hydrateSummary()
+    hydrateData()
 
     return () => {
       ignore = true
@@ -81,7 +111,7 @@ function Finanzas() {
     maximumFractionDigits: 2,
   })
 
-  const saveMovement = async (tipo, monto) => {
+  const saveMovement = async (tipo, monto, details = {}) => {
     setIsSaving(true)
     setStatusMessage('')
 
@@ -91,7 +121,7 @@ function Finanzas() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ tipo, monto }),
+        body: JSON.stringify({ tipo, monto, ...details }),
       })
 
       if (!response.ok) {
@@ -100,6 +130,7 @@ function Finanzas() {
 
       const data = await loadSummary()
       applySummary(data)
+      setProducts(await loadProducts())
       setStatusMessage('Movimiento guardado.')
     } catch (error) {
       setStatusMessage(error.message)
@@ -123,13 +154,27 @@ function Finanzas() {
   const addExpense = (event) => {
     event.preventDefault()
     const value = Number(expenseAmount)
+    const product =
+      expenseProduct === newProductValue ? newExpenseProduct.trim() : expenseProduct.trim()
 
     if (!value || value <= 0) {
       return
     }
 
-    saveMovement('gasto', value)
+    if (!product) {
+      setStatusMessage('Indica el producto comprado.')
+      return
+    }
+
+    saveMovement('gasto', value, {
+      categoria: expenseCategory,
+      producto: product,
+      ingredientes: expenseIngredients,
+    })
     setExpenseAmount('')
+    setExpenseProduct('')
+    setNewExpenseProduct('')
+    setExpenseIngredients('')
   }
 
   return (
@@ -191,7 +236,39 @@ function Finanzas() {
 
           <form onSubmit={addExpense}>
             <label htmlFor="expense-amount">Realizar gasto</label>
-            <div className="money-control">
+            <div className="expense-form-grid">
+              <select
+                aria-label="Categoria"
+                value={expenseCategory}
+                onChange={(event) => setExpenseCategory(event.target.value)}
+              >
+                {expenseCategories.map((category) => (
+                  <option key={category} value={category}>
+                    {category}
+                  </option>
+                ))}
+              </select>
+              <select
+                aria-label="Producto comprado"
+                value={expenseProduct}
+                onChange={(event) => setExpenseProduct(event.target.value)}
+              >
+                <option value="">Producto</option>
+                {products.map((product) => (
+                  <option key={product} value={product}>
+                    {product}
+                  </option>
+                ))}
+                <option value={newProductValue}>Nuevo producto</option>
+              </select>
+              {expenseProduct === newProductValue && (
+                <input
+                  aria-label="Nuevo producto"
+                  value={newExpenseProduct}
+                  onChange={(event) => setNewExpenseProduct(event.target.value)}
+                  placeholder="Producto comprado"
+                />
+              )}
               <input
                 id="expense-amount"
                 min="0"
@@ -201,6 +278,13 @@ function Finanzas() {
                 onChange={(event) => setExpenseAmount(event.target.value)}
                 placeholder="0"
               />
+              <textarea
+                aria-label="Ingredientes"
+                value={expenseIngredients}
+                onChange={(event) => setExpenseIngredients(event.target.value)}
+                placeholder={'Ingredientes\n- Agua\n- Azucar'}
+                rows="5"
+              />
               <button type="submit" disabled={isSaving}>
                 Gastar
               </button>
@@ -208,6 +292,212 @@ function Finanzas() {
           </form>
           {statusMessage && <p className="form-status">{statusMessage}</p>}
         </div>
+      </div>
+    </section>
+  )
+}
+
+function Gastos() {
+  const [expenses, setExpenses] = useState([])
+  const [editingExpense, setEditingExpense] = useState(null)
+  const [editAmount, setEditAmount] = useState('')
+  const [editCategory, setEditCategory] = useState(expenseCategories[0])
+  const [editProduct, setEditProduct] = useState('')
+  const [editIngredients, setEditIngredients] = useState('')
+  const [isSaving, setIsSaving] = useState(false)
+  const [statusMessage, setStatusMessage] = useState('')
+
+  const formatter = new Intl.NumberFormat('es-MX', {
+    style: 'currency',
+    currency: 'MXN',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+
+  const dateFormatter = new Intl.DateTimeFormat('es-MX', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  })
+
+  const loadExpenses = async () => {
+    const response = await fetch(`${API_URL}/api/gastos`)
+
+    if (!response.ok) {
+      throw new Error('No se pudieron cargar los gastos.')
+    }
+
+    return response.json()
+  }
+
+  useEffect(() => {
+    let ignore = false
+
+    loadExpenses()
+      .then((data) => {
+        if (!ignore) {
+          setExpenses(data)
+        }
+      })
+      .catch((error) => {
+        if (!ignore) {
+          setStatusMessage(error.message)
+        }
+      })
+
+    return () => {
+      ignore = true
+    }
+  }, [])
+
+  const startEditing = (expense) => {
+    setEditingExpense(expense)
+    setEditAmount(String(expense.monto))
+    setEditCategory(expense.categoria || expenseCategories[0])
+    setEditProduct(expense.producto || '')
+    setEditIngredients(expense.ingredientes || '')
+    setStatusMessage('')
+  }
+
+  const closeEditor = () => {
+    setEditingExpense(null)
+    setEditAmount('')
+    setEditProduct('')
+    setEditIngredients('')
+  }
+
+  const saveExpense = async (event) => {
+    event.preventDefault()
+    const amount = Number(editAmount)
+
+    if (!editingExpense || !amount || amount <= 0) {
+      return
+    }
+
+    if (!editProduct.trim()) {
+      setStatusMessage('Indica el producto comprado.')
+      return
+    }
+
+    setIsSaving(true)
+    setStatusMessage('')
+
+    try {
+      const response = await fetch(`${API_URL}/api/gastos/${editingExpense.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          monto: amount,
+          categoria: editCategory,
+          producto: editProduct,
+          ingredientes: editIngredients,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('No se pudo actualizar el gasto.')
+      }
+
+      setExpenses(await loadExpenses())
+      setStatusMessage('Gasto actualizado.')
+      closeEditor()
+    } catch (error) {
+      setStatusMessage(error.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  return (
+    <section className="page-panel expenses-panel">
+      <p className="eyebrow">Detalle</p>
+      <h1>Gastos</h1>
+      {statusMessage && <p className="form-status">{statusMessage}</p>}
+      {editingExpense && (
+        <form className="edit-expense-form" onSubmit={saveExpense}>
+          <div className="edit-form-header">
+            <h2>Editar gasto</h2>
+            <button type="button" onClick={closeEditor}>
+              Cancelar
+            </button>
+          </div>
+          <div className="expense-form-grid">
+            <select
+              aria-label="Categoria"
+              value={editCategory}
+              onChange={(event) => setEditCategory(event.target.value)}
+            >
+              {expenseCategories.map((category) => (
+                <option key={category} value={category}>
+                  {category}
+                </option>
+              ))}
+            </select>
+            <input
+              aria-label="Producto comprado"
+              value={editProduct}
+              onChange={(event) => setEditProduct(event.target.value)}
+              placeholder="Producto comprado"
+            />
+            <input
+              aria-label="Cantidad"
+              min="0"
+              step="0.01"
+              type="number"
+              value={editAmount}
+              onChange={(event) => setEditAmount(event.target.value)}
+              placeholder="0"
+            />
+            <textarea
+              aria-label="Ingredientes"
+              value={editIngredients}
+              onChange={(event) => setEditIngredients(event.target.value)}
+              placeholder={'Ingredientes\n- Agua\n- Azucar'}
+              rows="6"
+            />
+            <button type="submit" disabled={isSaving}>
+              Guardar cambios
+            </button>
+          </div>
+        </form>
+      )}
+      <div className="expenses-table-wrap">
+        <table className="expenses-table">
+          <thead>
+            <tr>
+              <th>Categoria</th>
+              <th>Producto</th>
+              <th>Fecha</th>
+              <th>Cantidad</th>
+              <th>Ingredientes</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {expenses.map((expense) => (
+              <tr key={expense.id}>
+                <td>{expense.categoria || '-'}</td>
+                <td>{expense.producto || '-'}</td>
+                <td>{dateFormatter.format(new Date(expense.creado_en))}</td>
+                <td>{formatter.format(expense.monto)}</td>
+                <td>
+                  <span className="ingredients-cell">{expense.ingredientes || '-'}</span>
+                </td>
+                <td>
+                  <button className="table-action-button" type="button" onClick={() => startEditing(expense)}>
+                    Editar
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {!expenses.length && (
+              <tr>
+                <td colSpan="6">Sin gastos registrados</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
     </section>
   )
@@ -238,6 +528,7 @@ function App() {
         <Routes>
           <Route path="/" element={<Navigate to="/finanzas" replace />} />
           <Route path="/finanzas" element={<Finanzas />} />
+          <Route path="/gastos" element={<Gastos />} />
         </Routes>
       </main>
     </div>
