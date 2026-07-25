@@ -6,11 +6,23 @@
   "packageManager": "pnpm@11.9.0",
   "scripts": {
     "dev": "vite",
+    "dev:backend": "prisma generate && tsx watch server/index.js",
+    "start:backend": "prisma generate && tsx server/index.js",
+    "db:create": "tsx server/create-database.js",
+    "db:generate": "prisma generate",
+    "db:migrate": "tsx server/create-database.js && prisma migrate dev",
+    "db:deploy": "tsx server/create-database.js && prisma migrate deploy",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@prisma/client": "^7.2.0",
+    "@prisma/adapter-mariadb": "^7.2.0",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "mysql2": "^3.15.3",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-router": "^8.3.0"
@@ -24,6 +36,8 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.3",
     "globals": "^17.7.0",
+    "prisma": "^7.2.0",
+    "tsx": "^4.20.6",
     "vite": "^8.1.1"
   }
 }

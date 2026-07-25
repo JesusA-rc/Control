@@ -1,0 +1,25 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+enum TipoFinanza {
+  ingreso
+  gasto
+}
+
+model Finanza {
+  id          Int         @id @default(autoincrement()) @db.UnsignedInt
+  tipo        TipoFinanza
+  monto       Decimal     @db.Decimal(12, 2)
+  descripcion String?     @db.VarChar(255)
+  creadoEn    DateTime    @default(now()) @map("creado_en")
+
+  @@index([tipo], map: "idx_finanzas_tipo")
+  @@index([creadoEn], map: "idx_finanzas_creado_en")
+  @@map("finanzas")
+}

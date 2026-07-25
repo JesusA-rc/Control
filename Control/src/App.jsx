@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { NavLink, Navigate, Route, Routes } from 'react-router'
 import './App.css'
 
@@ -10,12 +10,55 @@ const navItems = [
   },
 ]
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+
 function Finanzas() {
   const spendingLimit = 600
   const [incomeAmount, setIncomeAmount] = useState('')
   const [expenseAmount, setExpenseAmount] = useState('')
   const [income, setIncome] = useState(0)
   const [expenses, setExpenses] = useState(0)
+  const [isSaving, setIsSaving] = useState(false)
+  const [statusMessage, setStatusMessage] = useState('')
+
+  const applySummary = (data) => {
+    setIncome(Number(data.ingresos) || 0)
+    setExpenses(Number(data.gastos) || 0)
+  }
+
+  const loadSummary = async () => {
+    const response = await fetch(`${API_URL}/api/finanzas/resumen`)
+
+    if (!response.ok) {
+      throw new Error('No se pudo cargar el resumen.')
+    }
+
+    return response.json()
+  }
+
+  useEffect(() => {
+    let ignore = false
+
+    async function hydrateSummary() {
+      try {
+        const data = await loadSummary()
+
+        if (!ignore) {
+          applySummary(data)
+        }
+      } catch {
+        if (!ignore) {
+          setStatusMessage('Inicia el backend para cargar los datos guardados.')
+        }
+      }
+    }
+
+    hydrateSummary()
+
+    return () => {
+      ignore = true
+    }
+  }, [])
 
   const balance = income - expenses
   const limitProgress = Math.min((expenses / spendingLimit) * 100, 100)
@@ -37,6 +80,33 @@ function Finanzas() {
     maximumFractionDigits: 0,
   })
 
+  const saveMovement = async (tipo, monto) => {
+    setIsSaving(true)
+    setStatusMessage('')
+
+    try {
+      const response = await fetch(`${API_URL}/api/finanzas`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ tipo, monto }),
+      })
+
+      if (!response.ok) {
+        throw new Error('No se pudo guardar el movimiento.')
+      }
+
+      const data = await loadSummary()
+      applySummary(data)
+      setStatusMessage('Movimiento guardado.')
+    } catch (error) {
+      setStatusMessage(error.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   const addIncome = (event) => {
     event.preventDefault()
     const value = Number(incomeAmount)
@@ -45,7 +115,7 @@ function Finanzas() {
       return
     }
 
-    setIncome((currentIncome) => currentIncome + value)
+    saveMovement('ingreso', value)
     setIncomeAmount('')
   }
 
@@ -57,7 +127,7 @@ function Finanzas() {
       return
     }
 
-    setExpenses((currentExpenses) => currentExpenses + value)
+    saveMovement('gasto', value)
     setExpenseAmount('')
   }
 
@@ -112,7 +182,9 @@ function Finanzas() {
                 onChange={(event) => setIncomeAmount(event.target.value)}
                 placeholder="0"
               />
-              <button type="submit">Guardar</button>
+              <button type="submit" disabled={isSaving}>
+                Guardar
+              </button>
             </div>
           </form>
 
@@ -128,9 +200,12 @@ function Finanzas() {
                 onChange={(event) => setExpenseAmount(event.target.value)}
                 placeholder="0"
               />
-              <button type="submit">Gastar</button>
+              <button type="submit" disabled={isSaving}>
+                Gastar
+              </button>
             </div>
           </form>
+          {statusMessage && <p className="form-status">{statusMessage}</p>}
         </div>
       </div>
     </section>

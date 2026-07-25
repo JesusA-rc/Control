@@ -271,6 +271,17 @@ nav {
   cursor: pointer;
 }
 
+.money-control button:disabled {
+  cursor: not-allowed;
+  opacity: 0.68;
+}
+
+.form-status {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 700;
+}
+
 .money-control input:focus-visible,
 .money-control button:focus-visible {
   outline: 2px solid var(--accent);
