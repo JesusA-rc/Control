@@ -22,8 +22,9 @@ function databaseUrl() {
 }
 
 const parsedDatabaseUrl = new URL(databaseUrl())
+const databaseHost = parsedDatabaseUrl.hostname === 'localhost' ? '127.0.0.1' : parsedDatabaseUrl.hostname
 const adapter = new PrismaMariaDb({
-  host: parsedDatabaseUrl.hostname,
+  host: databaseHost,
   port: Number(parsedDatabaseUrl.port || 3306),
   user: decodeURIComponent(parsedDatabaseUrl.username),
   password: decodeURIComponent(parsedDatabaseUrl.password),

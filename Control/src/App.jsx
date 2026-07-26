@@ -9,6 +9,11 @@ const navItems = [
     icon: '$',
   },
   {
+    label: 'Grafica',
+    path: '/grafica',
+    icon: '%',
+  },
+  {
     label: 'Gastos',
     path: '/gastos',
     icon: '#',
@@ -25,6 +30,74 @@ const expenseCategories = [
   'Delivery',
 ]
 const newProductValue = '__nuevo__'
+const chartPeriods = {
+  week: 'Semana',
+  month: 'Mes',
+  year: 'Año',
+}
+
+const normalizeDate = (date) => new Date(date.getFullYear(), date.getMonth(), date.getDate())
+
+const formatDateKey = (date) => {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+
+  return `${year}-${month}-${day}`
+}
+
+const buildChartBuckets = (period) => {
+  const today = normalizeDate(new Date())
+
+  if (period === 'year') {
+    return Array.from({ length: 12 }, (_, index) => {
+      const date = new Date(today.getFullYear(), index, 1)
+
+      return {
+        key: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`,
+        label: new Intl.DateTimeFormat('es-MX', { month: 'short' }).format(date),
+        amount: 0,
+      }
+    })
+  }
+
+  if (period === 'month') {
+    const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate()
+
+    return Array.from({ length: daysInMonth }, (_, index) => {
+      const date = new Date(today.getFullYear(), today.getMonth(), index + 1)
+
+      return {
+        key: formatDateKey(date),
+        label: String(index + 1),
+        amount: 0,
+      }
+    })
+  }
+
+  const dayOfWeek = today.getDay() === 0 ? 6 : today.getDay() - 1
+  const weekStart = new Date(today)
+  weekStart.setDate(today.getDate() - dayOfWeek)
+
+  return Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(weekStart)
+    date.setDate(weekStart.getDate() + index)
+
+    return {
+      key: formatDateKey(date),
+      label: new Intl.DateTimeFormat('es-MX', { weekday: 'short' }).format(date),
+      amount: 0,
+    }
+  })
+}
+
+const getExpenseBucketKey = (date, period) => {
+  if (period === 'year') {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+  }
+
+  return formatDateKey(date)
+}
 
 function Finanzas() {
   const spendingLimit = 600
@@ -503,6 +576,130 @@ function Gastos() {
   )
 }
 
+function GraficaGastos() {
+  const [period, setPeriod] = useState('week')
+  const [expenses, setExpenses] = useState([])
+  const [statusMessage, setStatusMessage] = useState('')
+
+  const formatter = new Intl.NumberFormat('es-MX', {
+    style: 'currency',
+    currency: 'MXN',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+
+  useEffect(() => {
+    let ignore = false
+
+    async function loadExpenses() {
+      try {
+        const response = await fetch(`${API_URL}/api/gastos`)
+
+        if (!response.ok) {
+          throw new Error('No se pudieron cargar los gastos.')
+        }
+
+        const data = await response.json()
+
+        if (!ignore) {
+          setExpenses(data)
+        }
+      } catch (error) {
+        if (!ignore) {
+          setStatusMessage(error.message)
+        }
+      }
+    }
+
+    loadExpenses()
+
+    return () => {
+      ignore = true
+    }
+  }, [])
+
+  const chartData = useMemo(() => {
+    const buckets = buildChartBuckets(period)
+    const bucketByKey = new Map(buckets.map((bucket) => [bucket.key, bucket]))
+
+    expenses.forEach((expense) => {
+      const date = new Date(expense.creado_en)
+      const key = getExpenseBucketKey(date, period)
+      const bucket = bucketByKey.get(key)
+
+      if (bucket) {
+        bucket.amount += Number(expense.monto) || 0
+      }
+    })
+
+    return buckets
+  }, [expenses, period])
+
+  const totalSpent = chartData.reduce((total, bucket) => total + bucket.amount, 0)
+  const maxSpent = Math.max(...chartData.map((bucket) => bucket.amount), 0)
+  const averageSpent = chartData.length ? totalSpent / chartData.length : 0
+
+  return (
+    <section className="page-panel chart-panel">
+      <div className="chart-heading">
+        <div>
+          <p className="eyebrow">Analisis</p>
+          <h1>Grafica de gastos</h1>
+        </div>
+        <div className="period-control" aria-label="Periodo de la grafica">
+          {Object.entries(chartPeriods).map(([value, label]) => (
+            <button
+              key={value}
+              className={period === value ? 'active' : ''}
+              type="button"
+              onClick={() => setPeriod(value)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {statusMessage && <p className="form-status">{statusMessage}</p>}
+
+      <div className="chart-summary">
+        <article>
+          <span>Total gastado</span>
+          <strong>{formatter.format(totalSpent)}</strong>
+        </article>
+        <article>
+          <span>Promedio</span>
+          <strong>{formatter.format(averageSpent)}</strong>
+        </article>
+        <article>
+          <span>Periodo</span>
+          <strong>{chartPeriods[period]}</strong>
+        </article>
+      </div>
+
+      <div className="spending-chart" aria-label={`Gastos por ${chartPeriods[period].toLowerCase()}`}>
+        {chartData.map((bucket) => {
+          const barHeight = maxSpent ? Math.max((bucket.amount / maxSpent) * 100, 3) : 0
+
+          return (
+            <div className="chart-column" key={bucket.key}>
+              <div className="bar-track">
+                <div
+                  className="bar-fill"
+                  style={{ height: `${barHeight}%` }}
+                  title={`${bucket.label}: ${formatter.format(bucket.amount)}`}
+                ></div>
+              </div>
+              <strong>{formatter.format(bucket.amount)}</strong>
+              <span>{bucket.label}</span>
+            </div>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
 function App() {
   return (
     <div className="app-shell">
@@ -528,6 +725,7 @@ function App() {
         <Routes>
           <Route path="/" element={<Navigate to="/finanzas" replace />} />
           <Route path="/finanzas" element={<Finanzas />} />
+          <Route path="/grafica" element={<GraficaGastos />} />
           <Route path="/gastos" element={<Gastos />} />
         </Routes>
       </main>
