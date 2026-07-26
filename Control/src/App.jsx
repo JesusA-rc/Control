@@ -21,7 +21,7 @@ const navItems = [
 ]
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
-const expenseCategories = [
+const defaultExpenseCategories = [
   'Bebidas',
   'Comida',
   'Suscripciones',
@@ -29,6 +29,7 @@ const expenseCategories = [
   'Juegos',
   'Delivery',
 ]
+const newCategoryValue = '__nueva_categoria__'
 const newProductValue = '__nuevo__'
 const chartPeriods = {
   week: 'Semana',
@@ -99,17 +100,63 @@ const getExpenseBucketKey = (date, period) => {
   return formatDateKey(date)
 }
 
+const mergeCategories = (categories) =>
+  Array.from(
+    new Set([
+      ...defaultExpenseCategories,
+      ...categories.map((category) => category?.trim()).filter(Boolean),
+    ]),
+  )
+
+const loadCategories = async () => {
+  const response = await fetch(`${API_URL}/api/categorias`)
+
+  if (!response.ok) {
+    throw new Error('No se pudieron cargar las categorias.')
+  }
+
+  return response.json()
+}
+
+const getCurrentWeekRange = () => {
+  const today = normalizeDate(new Date())
+  const dayOfWeek = today.getDay() === 0 ? 6 : today.getDay() - 1
+  const weekStart = new Date(today)
+  weekStart.setDate(today.getDate() - dayOfWeek)
+  const weekEnd = new Date(weekStart)
+  weekEnd.setDate(weekStart.getDate() + 7)
+
+  return { weekStart, weekEnd }
+}
+
+const getWeeklyExpenseTotal = (expenses) => {
+  const { weekStart, weekEnd } = getCurrentWeekRange()
+
+  return expenses.reduce((total, expense) => {
+    const expenseDate = new Date(expense.creado_en)
+
+    if (expenseDate >= weekStart && expenseDate < weekEnd) {
+      return total + (Number(expense.monto) || 0)
+    }
+
+    return total
+  }, 0)
+}
+
 function Finanzas() {
   const spendingLimit = 600
   const [incomeAmount, setIncomeAmount] = useState('')
   const [expenseAmount, setExpenseAmount] = useState('')
-  const [expenseCategory, setExpenseCategory] = useState(expenseCategories[0])
+  const [categories, setCategories] = useState(defaultExpenseCategories)
+  const [expenseCategory, setExpenseCategory] = useState(defaultExpenseCategories[0])
+  const [newExpenseCategory, setNewExpenseCategory] = useState('')
   const [expenseProduct, setExpenseProduct] = useState('')
   const [newExpenseProduct, setNewExpenseProduct] = useState('')
   const [expenseIngredients, setExpenseIngredients] = useState('')
   const [products, setProducts] = useState([])
   const [income, setIncome] = useState(0)
   const [expenses, setExpenses] = useState(0)
+  const [weeklyExpenses, setWeeklyExpenses] = useState(0)
   const [isSaving, setIsSaving] = useState(false)
   const [statusMessage, setStatusMessage] = useState('')
 
@@ -138,16 +185,33 @@ function Finanzas() {
     return response.json()
   }
 
+  const loadExpenses = async () => {
+    const response = await fetch(`${API_URL}/api/gastos`)
+
+    if (!response.ok) {
+      throw new Error('No se pudieron cargar los gastos.')
+    }
+
+    return response.json()
+  }
+
   useEffect(() => {
     let ignore = false
 
     async function hydrateData() {
       try {
-        const [summaryData, productData] = await Promise.all([loadSummary(), loadProducts()])
+        const [summaryData, productData, categoryData, expenseData] = await Promise.all([
+          loadSummary(),
+          loadProducts(),
+          loadCategories(),
+          loadExpenses(),
+        ])
 
         if (!ignore) {
           applySummary(summaryData)
           setProducts(productData)
+          setCategories(mergeCategories(categoryData))
+          setWeeklyExpenses(getWeeklyExpenseTotal(expenseData))
         }
       } catch {
         if (!ignore) {
@@ -164,18 +228,18 @@ function Finanzas() {
   }, [])
 
   const balance = income - expenses
-  const limitProgress = Math.min((expenses / spendingLimit) * 100, 100)
+  const limitProgress = Math.min((weeklyExpenses / spendingLimit) * 100, 100)
   const limitStatus = useMemo(() => {
-    if (expenses >= spendingLimit) {
+    if (weeklyExpenses >= spendingLimit) {
       return 'danger'
     }
 
-    if (expenses >= spendingLimit / 2) {
+    if (weeklyExpenses >= spendingLimit / 2) {
       return 'warning'
     }
 
     return 'normal'
-  }, [expenses])
+  }, [weeklyExpenses])
 
   const formatter = new Intl.NumberFormat('es-MX', {
     style: 'currency',
@@ -204,6 +268,8 @@ function Finanzas() {
       const data = await loadSummary()
       applySummary(data)
       setProducts(await loadProducts())
+      setCategories(mergeCategories(await loadCategories()))
+      setWeeklyExpenses(getWeeklyExpenseTotal(await loadExpenses()))
       setStatusMessage('Movimiento guardado.')
     } catch (error) {
       setStatusMessage(error.message)
@@ -227,6 +293,8 @@ function Finanzas() {
   const addExpense = (event) => {
     event.preventDefault()
     const value = Number(expenseAmount)
+    const category =
+      expenseCategory === newCategoryValue ? newExpenseCategory.trim() : expenseCategory.trim()
     const product =
       expenseProduct === newProductValue ? newExpenseProduct.trim() : expenseProduct.trim()
 
@@ -239,12 +307,19 @@ function Finanzas() {
       return
     }
 
+    if (!category) {
+      setStatusMessage('Indica la categoria del gasto.')
+      return
+    }
+
     saveMovement('gasto', value, {
-      categoria: expenseCategory,
+      categoria: category,
       producto: product,
       ingredientes: expenseIngredients,
     })
     setExpenseAmount('')
+    setExpenseCategory(category)
+    setNewExpenseCategory('')
     setExpenseProduct('')
     setNewExpenseProduct('')
     setExpenseIngredients('')
@@ -274,7 +349,7 @@ function Finanzas() {
           <div className="limit-header">
             <div>
               <span>Limite de gastos</span>
-              <strong>{formatter.format(expenses)}</strong>
+              <strong>{formatter.format(weeklyExpenses)}</strong>
             </div>
             <p>{formatter.format(spendingLimit)}</p>
           </div>
@@ -284,7 +359,7 @@ function Finanzas() {
           <p className="limit-copy">
             {limitStatus === 'danger'
               ? 'Limite alcanzado'
-              : `${formatter.format(spendingLimit - expenses)} disponibles`}
+              : `${formatter.format(spendingLimit - weeklyExpenses)} disponibles esta semana`}
           </p>
         </article>
 
@@ -315,12 +390,21 @@ function Finanzas() {
                 value={expenseCategory}
                 onChange={(event) => setExpenseCategory(event.target.value)}
               >
-                {expenseCategories.map((category) => (
+                {categories.map((category) => (
                   <option key={category} value={category}>
                     {category}
                   </option>
                 ))}
+                <option value={newCategoryValue}>Nueva categoria</option>
               </select>
+              {expenseCategory === newCategoryValue && (
+                <input
+                  aria-label="Nueva categoria"
+                  value={newExpenseCategory}
+                  onChange={(event) => setNewExpenseCategory(event.target.value)}
+                  placeholder="Categoria"
+                />
+              )}
               <select
                 aria-label="Producto comprado"
                 value={expenseProduct}
@@ -374,7 +458,8 @@ function Gastos() {
   const [expenses, setExpenses] = useState([])
   const [editingExpense, setEditingExpense] = useState(null)
   const [editAmount, setEditAmount] = useState('')
-  const [editCategory, setEditCategory] = useState(expenseCategories[0])
+  const [categories, setCategories] = useState(defaultExpenseCategories)
+  const [editCategory, setEditCategory] = useState(defaultExpenseCategories[0])
   const [editProduct, setEditProduct] = useState('')
   const [editIngredients, setEditIngredients] = useState('')
   const [isSaving, setIsSaving] = useState(false)
@@ -405,10 +490,11 @@ function Gastos() {
   useEffect(() => {
     let ignore = false
 
-    loadExpenses()
-      .then((data) => {
+    Promise.all([loadExpenses(), loadCategories()])
+      .then(([expenseData, categoryData]) => {
         if (!ignore) {
-          setExpenses(data)
+          setExpenses(expenseData)
+          setCategories(mergeCategories(categoryData))
         }
       })
       .catch((error) => {
@@ -425,7 +511,7 @@ function Gastos() {
   const startEditing = (expense) => {
     setEditingExpense(expense)
     setEditAmount(String(expense.monto))
-    setEditCategory(expense.categoria || expenseCategories[0])
+    setEditCategory(expense.categoria || defaultExpenseCategories[0])
     setEditProduct(expense.producto || '')
     setEditIngredients(expense.ingredientes || '')
     setStatusMessage('')
@@ -473,6 +559,7 @@ function Gastos() {
       }
 
       setExpenses(await loadExpenses())
+      setCategories(mergeCategories(await loadCategories()))
       setStatusMessage('Gasto actualizado.')
       closeEditor()
     } catch (error) {
@@ -501,7 +588,7 @@ function Gastos() {
               value={editCategory}
               onChange={(event) => setEditCategory(event.target.value)}
             >
-              {expenseCategories.map((category) => (
+              {categories.map((category) => (
                 <option key={category} value={category}>
                   {category}
                 </option>

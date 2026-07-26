@@ -32,14 +32,18 @@ function serializeFinanza(finanza) {
   }
 }
 
-const expenseCategories = new Set([
+const defaultExpenseCategories = [
   'Bebidas',
   'Comida',
   'Suscripciones',
   'Entretenimiento',
   'Juegos',
   'Delivery',
-])
+]
+
+function cleanCategory(category) {
+  return category?.trim().slice(0, 80) || ''
+}
 
 app.get('/api/finanzas', async (_req, res, next) => {
   try {
@@ -110,6 +114,33 @@ app.get('/api/productos', async (_req, res, next) => {
   }
 })
 
+app.get('/api/categorias', async (_req, res, next) => {
+  try {
+    const rows = await prisma.finanza.findMany({
+      where: {
+        tipo: 'gasto',
+        categoria: { not: null },
+      },
+      select: { categoria: true },
+      distinct: ['categoria'],
+      orderBy: { categoria: 'asc' },
+    })
+
+    const categories = new Set(defaultExpenseCategories)
+    rows.forEach((row) => {
+      const category = cleanCategory(row.categoria)
+
+      if (category) {
+        categories.add(category)
+      }
+    })
+
+    res.json([...categories])
+  } catch (error) {
+    next(error)
+  }
+})
+
 app.post('/api/finanzas', async (req, res, next) => {
   try {
     const {
@@ -130,9 +161,11 @@ app.post('/api/finanzas', async (req, res, next) => {
       return res.status(400).json({ message: 'El monto debe ser mayor a 0.' })
     }
 
+    const cleanedCategory = cleanCategory(categoria)
+
     if (tipo === 'gasto') {
-      if (!expenseCategories.has(categoria)) {
-        return res.status(400).json({ message: 'Selecciona una categoria valida.' })
+      if (!cleanedCategory) {
+        return res.status(400).json({ message: 'Indica la categoria del gasto.' })
       }
 
       if (!producto?.trim()) {
@@ -145,7 +178,7 @@ app.post('/api/finanzas', async (req, res, next) => {
         tipo,
         monto: amount,
         descripcion: descripcion || null,
-        categoria: tipo === 'gasto' ? categoria : null,
+        categoria: tipo === 'gasto' ? cleanedCategory : null,
         producto: tipo === 'gasto' ? producto.trim() : null,
         ingredientes: tipo === 'gasto' ? ingredientes?.trim() || null : null,
       },
@@ -171,8 +204,10 @@ app.put('/api/gastos/:id', async (req, res, next) => {
       return res.status(400).json({ message: 'El monto debe ser mayor a 0.' })
     }
 
-    if (!expenseCategories.has(categoria)) {
-      return res.status(400).json({ message: 'Selecciona una categoria valida.' })
+    const cleanedCategory = cleanCategory(categoria)
+
+    if (!cleanedCategory) {
+      return res.status(400).json({ message: 'Indica la categoria del gasto.' })
     }
 
     if (!producto?.trim()) {
@@ -183,7 +218,7 @@ app.put('/api/gastos/:id', async (req, res, next) => {
       where: { id, tipo: 'gasto' },
       data: {
         monto: amount,
-        categoria,
+        categoria: cleanedCategory,
         producto: producto.trim(),
         ingredientes: ingredientes?.trim() || null,
       },
